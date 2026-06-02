@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bucket-api-config
+  namespace: sd-api-bucket-v2
+data:
+  STORAGE_MODE: "LOCAL"
+  VAULT_GCP_SECRET_PATH: "gcp/config"
+  VAULT_MINIO_SECRET_PATH: "minio/config"
+  GOOGLE_CLOUD_PROJECT: "tp3-gcp-497003"
+  GCS_BUCKET_NAME: "ejercicio-1-grupo-abc"
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_BUCKET_NAME: "local-bucket"
+  MINIO_SECURE: "false"

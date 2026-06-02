@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bootstrap
+  namespace: sd-api-bucket-v2
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: minio-bootstrap
+          image: minio/mc:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until /usr/bin/mc alias set local http://minio:9000 "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"; do sleep 2; done
+              /usr/bin/mc mb --ignore-existing local/local-bucket
+          env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-bootstrap-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-bootstrap-secrets
+                  key: MINIO_SECRET_KEY
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-init
+  namespace: sd-api-bucket-v2
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-init
+          image: hashicorp/vault:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until vault status >/dev/null 2>&1; do sleep 2; done
+              vault kv put secret/minio/config \
+                endpoint="$MINIO_ENDPOINT" \
+                access_key="$MINIO_ACCESS_KEY" \
+                secret_key="$MINIO_SECRET_KEY" \
+                bucket_name="$MINIO_BUCKET_NAME" \
+                secure="$MINIO_SECURE"
+              if [ -s /secrets/credentials.json ]; then
+                vault kv put secret/gcp/config \
+                  project_id="$GOOGLE_CLOUD_PROJECT" \
+                  bucket_name="$GCS_BUCKET_NAME" \
+                  credentials="$(cat /secrets/credentials.json)"
+              fi
+          env:
+            - name: VAULT_ADDR
+              value: http://vault:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-bootstrap-secrets
+                  key: VAULT_TOKEN
+            - name: GOOGLE_CLOUD_PROJECT
+              valueFrom:
+                configMapKeyRef:
+                  name: bucket-api-config
+                  key: GOOGLE_CLOUD_PROJECT
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: bucket-api-config
+                  key: GCS_BUCKET_NAME
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: bucket-api-config
+                  key: MINIO_ENDPOINT
+            - name: MINIO_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: bucket-api-config
+                  key: MINIO_BUCKET_NAME
+            - name: MINIO_SECURE
+              valueFrom:
+                configMapKeyRef:
+                  name: bucket-api-config
+                  key: MINIO_SECURE
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-bootstrap-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vault-bootstrap-secrets
+                  key: MINIO_SECRET_KEY
+          volumeMounts:
+            - name: gcp-credentials
+              mountPath: /secrets
+              readOnly: true
+      volumes:
+        - name: gcp-credentials
+          secret:
+            secretName: vault-bootstrap-secrets
+            items:
+              - key: credentials.json
+                path: credentials.json
