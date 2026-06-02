@@ -30,6 +30,8 @@ Reemplazar `docker-compose` por recursos de Kubernetes:
 
 ## Como aplicar
 
+Esta version no crea un namespace nuevo. Se despliega en el namespace donde vos tengas permisos, por ejemplo `g-abc`.
+
 1. Construir la imagen de la API:
 
 ```bash
@@ -44,10 +46,10 @@ kind load docker-image sd-api-bucket:v2
 
 3. Crear un archivo real de secretos a partir de `k8s/03-secrets.example.yaml`.
 4. Completar el contenido de `credentials.json` si vas a usar `CLOUD`.
-5. Aplicar los manifests:
+5. Aplicar los manifests en tu namespace:
 
 ```bash
-kubectl apply -k version2/k8s
+kubectl apply -k version2/k8s -n g-abc
 ```
 
 ## Exponer localmente para pruebas
@@ -55,20 +57,20 @@ kubectl apply -k version2/k8s
 API:
 
 ```bash
-kubectl port-forward -n sd-api-bucket-v2 svc/api 8000:8000
+kubectl port-forward -n g-abc svc/api 8000:8000
 ```
 
 MinIO:
 
 ```bash
-kubectl port-forward -n sd-api-bucket-v2 svc/minio 9000:9000
-kubectl port-forward -n sd-api-bucket-v2 svc/minio-console 9001:9001
+kubectl port-forward -n g-abc svc/minio 9000:9000
+kubectl port-forward -n g-abc svc/minio-console 9001:9001
 ```
 
 Vault:
 
 ```bash
-kubectl port-forward -n sd-api-bucket-v2 svc/vault 8200:8200
+kubectl port-forward -n g-abc svc/vault 8200:8200
 ```
 
 ## Probar
@@ -93,7 +95,13 @@ curl.exe "http://localhost:8000/download/captura.png" --output captura_descargad
 
 ## Importante
 
-Esta `version2` deja armada la migracion a Kubernetes con replicas y `ClusterIP` para API, Vault y MinIO, pero para alta disponibilidad real de Vault y MinIO no alcanza con solo aumentar replicas:
+Para una prueba funcional simple en un cluster con permisos limitados, conviene usar:
+
+- `api`: 2 replicas
+- `vault`: 1 replica
+- `minio`: 1 replica
+
+Esta `version2` deja armada la migracion a Kubernetes con `ClusterIP` para API, Vault y MinIO, pero para alta disponibilidad real de Vault y MinIO no alcanza con solo aumentar replicas:
 
 - Vault necesita un backend HA real, por ejemplo Raft integrado con `StatefulSet`
 - MinIO necesita modo distribuido y volumenes persistentes consistentes

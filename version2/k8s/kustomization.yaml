@@ -1,8 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: sd-api-bucket-v2
 resources:
-  - 01-namespace.yaml
   - 02-configmap.yaml
   - 03-secrets.example.yaml
   - 04-vault.yaml

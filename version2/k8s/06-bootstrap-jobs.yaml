@@ -2,7 +2,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: minio-bootstrap
-  namespace: sd-api-bucket-v2
 spec:
   template:
     spec:
@@ -32,30 +31,32 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: vault-init
-  namespace: sd-api-bucket-v2
 spec:
   template:
     spec:
       restartPolicy: OnFailure
       containers:
         - name: vault-init
-          image: hashicorp/vault:latest
+          image: curlimages/curl:latest
           command:
             - /bin/sh
             - -c
             - |
-              until vault status >/dev/null 2>&1; do sleep 2; done
-              vault kv put secret/minio/config \
-                endpoint="$MINIO_ENDPOINT" \
-                access_key="$MINIO_ACCESS_KEY" \
-                secret_key="$MINIO_SECRET_KEY" \
-                bucket_name="$MINIO_BUCKET_NAME" \
-                secure="$MINIO_SECURE"
+              until curl -sf "$VAULT_ADDR/v1/sys/health" >/dev/null; do sleep 2; done
+              curl -sf \
+                -H "X-Vault-Token: $VAULT_TOKEN" \
+                -H "Content-Type: application/json" \
+                --request POST \
+                --data "{\"data\":{\"endpoint\":\"$MINIO_ENDPOINT\",\"access_key\":\"$MINIO_ACCESS_KEY\",\"secret_key\":\"$MINIO_SECRET_KEY\",\"bucket_name\":\"$MINIO_BUCKET_NAME\",\"secure\":\"$MINIO_SECURE\"}}" \
+                "$VAULT_ADDR/v1/secret/data/minio/config"
               if [ -s /secrets/credentials.json ]; then
-                vault kv put secret/gcp/config \
-                  project_id="$GOOGLE_CLOUD_PROJECT" \
-                  bucket_name="$GCS_BUCKET_NAME" \
-                  credentials="$(cat /secrets/credentials.json)"
+                CREDENTIALS_JSON_ESCAPED=$(tr -d '\n' < /secrets/credentials.json | sed 's/\\/\\\\/g; s/"/\\"/g')
+                curl -sf \
+                  -H "X-Vault-Token: $VAULT_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  --request POST \
+                  --data "{\"data\":{\"project_id\":\"$GOOGLE_CLOUD_PROJECT\",\"bucket_name\":\"$GCS_BUCKET_NAME\",\"credentials\":\"$CREDENTIALS_JSON_ESCAPED\"}}" \
+                  "$VAULT_ADDR/v1/secret/data/gcp/config"
               fi
           env:
             - name: VAULT_ADDR

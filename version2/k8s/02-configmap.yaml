@@ -2,7 +2,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: bucket-api-config
-  namespace: sd-api-bucket-v2
 data:
   STORAGE_MODE: "LOCAL"
   VAULT_GCP_SECRET_PATH: "gcp/config"
